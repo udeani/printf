@@ -1,85 +1,96 @@
 /*
  * File: _printf.c
- * Auth: Udeani henry
+ * Auth: Udeani Henry
+ *       Adewale Adeleke
  */
 
 #include "main.h"
-#include <stdlib.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <string.h>
 
-void string_s(va_list arg);
-void char_c(va_list arg);
+void cleanup(va_list args, buffer_t *output);
+int run_printf(const char *format, va_list args, buffer_t *output);
+int _printf(const char *format, ...);
 
 /**
- * _printf - function to print any buffer to standard output
- * @format: pointer to array of characters to print
- * ...: variadic functions to handle options for the print
- * Return: 0
+ * cleanup - Peforms cleanup operations for _printf.
+ * @args: A va_list of arguments provided to _printf.
+ * @output: A buffer_t struct.
+ */
+void cleanup(va_list args, buffer_t *output)
+{
+	va_end(args);
+	write(1, output->start, output->len);
+	free_buffer(output);
+}
+
+/**
+ * run_printf - Reads through the format string for _printf.
+ * @format: Character string to print - may contain directives.
+ * @output: A buffer_t struct containing a buffer.
+ * @args: A va_list of arguments.
+ *
+ * Return: The number of characters stored to output.
+ */
+int run_printf(const char *format, va_list args, buffer_t *output)
+{
+	int i, wid, prec, ret = 0;
+	char tmp;
+	unsigned char flags, len;
+	unsigned int (*f)(va_list, buffer_t *,
+			unsigned char, int, int, unsigned char);
+
+	for (i = 0; *(format + i); i++)
+	{
+		len = 0;
+		if (*(format + i) == '%')
+		{
+			tmp = 0;
+			flags = handle_flags(format + i + 1, &tmp);
+			wid = handle_width(args, format + i + tmp + 1, &tmp);
+			prec = handle_precision(args, format + i + tmp + 1,
+					&tmp);
+			len = handle_length(format + i + tmp + 1, &tmp);
+
+			f = handle_specifiers(format + i + tmp + 1);
+			if (f != NULL)
+			{
+				i += tmp + 1;
+				ret += f(args, output, flags, wid, prec, len);
+				continue;
+			}
+			else if (*(format + i + tmp + 1) == '\0')
+			{
+				ret = -1;
+				break;
+			}
+		}
+		ret += _memcpy(output, (format + i), 1);
+		i += (len != 0) ? 1 : 0;
+	}
+	cleanup(args, output);
+	return (ret);
+}
+
+/**
+ * _printf - Outputs a formatted string.
+ * @format: Character string to print - may contain directives.
+ *
+ * Return: The number of characters printed.
  */
 int _printf(const char *format, ...)
 {
-	int n, i = 0;
+	buffer_t *output;
+	va_list args;
+	int ret;
 
-	va_list arg;
+	if (format == NULL)
+		return (-1);
+	output = init_buffer();
+	if (output == NULL)
+		return (-1);
 
-	handls functions[] =
-	{
-		{"s", string_s},
-		{"c", char_c},
-		{NULL, NULL},
-	};
+	va_start(args, format);
 
-	va_start(arg, format);
+	ret = run_printf(format, args, output);
 
-	for (n = 0; format[n] != '\0'; n++)
-	{
-		if (format[n] != '%')
-		{
-			write(1, &format[n], 1);
-		}
-		else
-		{
-			n++;
-
-			for (i = 0; *(functions[i].p); i++)
-			{
-
-				if (format[n] == *(functions[i].p))
-				{
-					(functions[i].va_items(arg));
-				}
-			}
-
-		}
-	va_end(arg);
-	}
-	return(0);
-}
-
-/*
- * string_s - function to prints an array of characters.
- * @arg: variadic list to print
- */
-void string_s(va_list arg)
-{
-	long unsigned int j = 0;
-	char *v = va_arg(arg, char *);
-
-	for (j = 0; j < sizeof(v) ; j++)
-		(write(1, &v[j], 1));
-}
-
-/*
- * char_c - function to print single characters
- * @arg: variadic list to print.
- */
-void char_c(va_list arg)
-{
-	long unsigned int j = 0;
-	char *v = va_arg(arg, char *);
-
-	for (j = 0; j < sizeof(v) ; j++)
-		(write(1, &v[j], 1));
+	return (ret);
 }
